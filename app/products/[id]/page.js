@@ -1,24 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '../../../lib/supabase'
 import Link from 'next/link'
-
-const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/dashboard' },
-  { label: 'Orders', href: '/orders' },
-  { label: 'Products', href: '/products' },
-  { label: 'Banners', href: '/banners' },
-  { label: 'Customers', href: '/customers' },
-  { label: 'Settings', href: '/settings' },
-]
+import AdminSidebar from '../../components/AdminSidebar'
 
 const CATEGORIES = ['Tote Bags', 'Purses', 'Clutches']
 
 export default function EditProductPage({ params }) {
   const router = useRouter()
-  const pathname = usePathname()
   const [productId, setProductId] = useState(null)
 
   const [form, setForm] = useState({
@@ -188,7 +179,6 @@ export default function EditProductPage({ params }) {
       ? variants.reduce((sum, v) => sum + Number(v.stock || 0), 0)
       : Number(form.stock || 0)
 
-    // Update the product itself
     const { error } = await supabase
       .from('products')
       .update({
@@ -207,7 +197,6 @@ export default function EditProductPage({ params }) {
       return
     }
 
-    // Replace tags: delete existing, insert current selection
     await supabase.from('product_tags').delete().eq('product_id', productId)
     if (selectedTagIds.length > 0) {
       const tagRows = selectedTagIds.map(tagId => ({
@@ -217,7 +206,6 @@ export default function EditProductPage({ params }) {
       await supabase.from('product_tags').insert(tagRows)
     }
 
-    // Replace variants: delete existing, insert current list
     await supabase.from('product_variants').delete().eq('product_id', productId)
     if (variants.length > 0) {
       const variantRows = variants.map((v, i) => ({
@@ -257,31 +245,13 @@ export default function EditProductPage({ params }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#fff8f2] flex">
+    <div className="min-h-screen bg-[#fff8f2] flex flex-col sm:flex-row">
 
-      {/* Sidebar */}
-      <aside className="w-64 bg-[#1a0a00] min-h-screen p-6 flex flex-col">
-        <h1 className="text-white font-bold text-xl mb-8">Banfos Admin</h1>
-        <nav className="flex flex-col gap-2 flex-1">
-          {NAV_ITEMS.map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`px-4 py-3 rounded-xl transition text-sm font-medium ${
-                pathname === item.href
-                  ? 'bg-[#f59b1e] text-[#1a0a00]'
-                  : 'text-stone-300 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </aside>
+      <AdminSidebar />
 
       {/* Main Content */}
-      <main className="flex-1 p-8 max-w-4xl">
-        <div className="flex items-center justify-between mb-8">
+      <main className="flex-1 p-4 sm:p-8 max-w-4xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8">
           <div className="flex items-center gap-4">
             <Link href="/products" className="text-stone-400 hover:text-[#1a0a00]">
               ← Back
@@ -290,7 +260,7 @@ export default function EditProductPage({ params }) {
           </div>
           <button
             onClick={handleDelete}
-            className="text-red-400 hover:text-red-600 text-sm font-semibold"
+            className="text-red-400 hover:text-red-600 text-sm font-semibold text-left sm:text-right"
           >
             Delete Product
           </button>
@@ -324,7 +294,7 @@ export default function EditProductPage({ params }) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-[#1a0a00] block mb-1">Price (GHS)</label>
                 <input
@@ -442,8 +412,8 @@ export default function EditProductPage({ params }) {
               <div className="space-y-4">
                 {variants.map((variant, i) => (
                   <div key={variant.id || i} className="border border-stone-200 rounded-xl p-4 space-y-3">
-                    <div className="flex justify-between items-start">
-                      <div className="grid grid-cols-3 gap-3 flex-1">
+                    <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 w-full">
                         <div>
                           <label className="text-xs font-medium text-[#1a0a00] block mb-1">Color Name</label>
                           <input
@@ -476,7 +446,7 @@ export default function EditProductPage({ params }) {
                       </div>
                       <button
                         onClick={() => removeVariant(i)}
-                        className="text-red-400 hover:text-red-600 text-xs font-semibold ml-3 mt-5"
+                        className="text-red-400 hover:text-red-600 text-xs font-semibold sm:mt-5"
                       >
                         Remove
                       </button>

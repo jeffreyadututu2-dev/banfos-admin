@@ -1,22 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '../../lib/supabase'
-import Link from 'next/link'
-
-const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/dashboard' },
-  { label: 'Orders', href: '/orders' },
-  { label: 'Products', href: '/products' },
-  { label: 'Banners', href: '/banners' },
-  { label: 'Customers', href: '/customers' },
-  { label: 'Settings', href: '/settings' },
-]
+import AdminSidebar from '../components/AdminSidebar'
 
 export default function CustomersPage() {
   const router = useRouter()
-  const pathname = usePathname()
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -36,7 +26,6 @@ export default function CustomersPage() {
       return
     }
 
-    // Get all customer profiles
     const { data: profiles } = await supabase
       .from('profiles')
       .select('*')
@@ -48,7 +37,6 @@ export default function CustomersPage() {
       return
     }
 
-    // Get all orders to compute per-customer stats
     const { data: orders } = await supabase
       .from('orders')
       .select('user_id, total, created_at')
@@ -67,9 +55,7 @@ export default function CustomersPage() {
         lastOrderDate,
       }
     })
-    console.log('Profiles:', profiles)
-    console.log('Orders:', orders)
-    console.log('With Stats:', withStats)
+
     setCustomers(withStats)
     setLoading(false)
   }
@@ -87,30 +73,12 @@ export default function CustomersPage() {
   const subscribedCount = customers.filter(c => c.marketing_consent).length
 
   return (
-    <div className="min-h-screen bg-[#fff8f2] flex">
+    <div className="min-h-screen bg-[#fff8f2] flex flex-col sm:flex-row">
 
-      {/* Sidebar */}
-      <aside className="w-64 bg-[#1a0a00] min-h-screen p-6 flex flex-col">
-        <h1 className="text-white font-bold text-xl mb-8">Banfos Admin</h1>
-        <nav className="flex flex-col gap-2 flex-1">
-          {NAV_ITEMS.map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`px-4 py-3 rounded-xl transition text-sm font-medium ${
-                pathname === item.href
-                  ? 'bg-[#f59b1e] text-[#1a0a00]'
-                  : 'text-stone-300 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </aside>
+      <AdminSidebar />
 
       {/* Main Content */}
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-4 sm:p-8">
         <h2 className="text-2xl font-bold text-[#1a0a00] mb-2">Customers</h2>
         <p className="text-stone-400 text-sm mb-8">
           {customers.length} total · {subscribedCount} subscribed to marketing emails
@@ -118,7 +86,7 @@ export default function CustomersPage() {
 
         {/* Filters + Search */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between mb-6">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {['All', 'Subscribed', 'Not Subscribed'].map(filter => (
               <button
                 key={filter}
@@ -149,8 +117,8 @@ export default function CustomersPage() {
             <p className="text-stone-400">No customers found.</p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-white rounded-2xl shadow overflow-x-auto">
+            <table className="w-full text-sm min-w-[700px]">
               <thead className="bg-stone-50 text-stone-400 text-xs uppercase">
                 <tr>
                   <th className="text-left px-6 py-3">Name</th>

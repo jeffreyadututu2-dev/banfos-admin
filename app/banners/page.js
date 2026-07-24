@@ -1,22 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '../../lib/supabase'
-import Link from 'next/link'
-
-const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/dashboard' },
-  { label: 'Orders', href: '/orders' },
-  { label: 'Products', href: '/products' },
-  { label: 'Banners', href: '/banners' },
-  { label: 'Customers', href: '/customers' },
-  { label: 'Settings', href: '/settings' },
-]
+import AdminSidebar from '../components/AdminSidebar'
 
 export default function BannersPage() {
   const router = useRouter()
-  const pathname = usePathname()
 
   const [announcement, setAnnouncement] = useState(null)
   const [banners, setBanners] = useState([])
@@ -106,30 +96,12 @@ export default function BannersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fff8f2] flex">
+    <div className="min-h-screen bg-[#fff8f2] flex flex-col sm:flex-row">
 
-      {/* Sidebar */}
-      <aside className="w-64 bg-[#1a0a00] min-h-screen p-6 flex flex-col">
-        <h1 className="text-white font-bold text-xl mb-8">Banfos Admin</h1>
-        <nav className="flex flex-col gap-2 flex-1">
-          {NAV_ITEMS.map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`px-4 py-3 rounded-xl transition text-sm font-medium ${
-                pathname === item.href
-                  ? 'bg-[#f59b1e] text-[#1a0a00]'
-                  : 'text-stone-300 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </aside>
+      <AdminSidebar />
 
       {/* Main Content */}
-      <main className="flex-1 p-8 max-w-4xl">
+      <main className="flex-1 p-4 sm:p-8 max-w-4xl">
         <h2 className="text-2xl font-bold text-[#1a0a00] mb-8">Banners</h2>
 
         {/* Announcement Strip */}
@@ -228,7 +200,7 @@ export default function BannersPage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-medium text-[#1a0a00] block mb-1">Label</label>
                   <input
