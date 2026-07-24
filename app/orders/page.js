@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '../../../lib/supabase'
+import { createClient } from '../../lib/supabase'
 import Link from 'next/link'
-import AdminSidebar from '../../components/AdminSidebar'
+import AdminSidebar from '../components/AdminSidebar'
 
 const CATEGORIES = ['Tote Bags', 'Purses', 'Clutches']
 
