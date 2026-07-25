@@ -7,6 +7,7 @@ import Link from 'next/link'
 import AdminSidebar from '../../components/AdminSidebar'
 
 const CATEGORIES = ['Tote Bags', 'Purses', 'Clutches', 'Office Wears', 'Heels', 'Jewelry']
+const PRODUCT_TYPES = ['Bag', 'Jewelry', 'Heels', 'Office Wear']
 
 export default function EditProductPage({ params }) {
   const router = useRouter()
@@ -17,6 +18,7 @@ export default function EditProductPage({ params }) {
     description: '',
     price: '',
     category: '',
+    productType: '',
     stock: '',
     salePrice: '',
     isOnSale: false,
@@ -56,6 +58,7 @@ export default function EditProductPage({ params }) {
           description: product.description || '',
           price: product.price || '',
           category: product.category || '',
+          productType: product.product_type || '',
           stock: product.stock || '',
           salePrice: product.sale_price || '',
           isOnSale: product.is_on_sale || false,
@@ -171,8 +174,8 @@ export default function EditProductPage({ params }) {
   }
 
   async function handleSave() {
-    if (!form.name || !form.price || !form.category || mainImages.length === 0) {
-      alert('Please fill in name, price, category, and at least one product photo.')
+    if (!form.name || !form.price || !form.category || !form.productType || mainImages.length === 0) {
+      alert('Please fill in name, price, category, product type, and at least one product photo.')
       return
     }
 
@@ -190,6 +193,7 @@ export default function EditProductPage({ params }) {
         description: form.description,
         price: Number(form.price),
         category: form.category,
+        product_type: form.productType,
         stock: totalStock,
         images: mainImages,
         is_on_sale: form.isOnSale,
@@ -298,6 +302,21 @@ export default function EditProductPage({ params }) {
                 rows={3}
                 className="w-full border border-stone-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[#f59b1e]"
               />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-[#1a0a00] block mb-1">Product Type</label>
+              <select
+                name="productType"
+                value={form.productType}
+                onChange={handleChange}
+                className="w-full border border-stone-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[#f59b1e]"
+              >
+                <option value="">Select type</option>
+                {PRODUCT_TYPES.map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
