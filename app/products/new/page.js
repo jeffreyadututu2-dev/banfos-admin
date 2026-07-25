@@ -6,7 +6,7 @@ import { createClient } from '../../../lib/supabase'
 import Link from 'next/link'
 import AdminSidebar from '../../components/AdminSidebar'
 
-const CATEGORIES = ['Tote Bags', 'Purses', 'Clutches']
+const CATEGORIES = ['Tote Bags', 'Purses', 'Clutches', 'Office Wears', 'Heels', 'Jewelry']
 
 export default function NewProductPage() {
   const router = useRouter()
@@ -17,6 +17,8 @@ export default function NewProductPage() {
     price: '',
     category: '',
     stock: '',
+    salePrice: '',
+    isOnSale: false,
   })
   const [mainImages, setMainImages] = useState([])
   const [uploading, setUploading] = useState(false)
@@ -142,6 +144,8 @@ export default function NewProductPage() {
         stock: totalStock,
         images: mainImages,
         is_active: true,
+        is_on_sale: form.isOnSale,
+        sale_price: form.isOnSale ? Number(form.salePrice) : null,
       })
       .select()
       .single()
@@ -253,6 +257,37 @@ export default function NewProductPage() {
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="border border-stone-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-[#1a0a00]">On Sale</label>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, isOnSale: !form.isOnSale })}
+                  className={`text-xs font-semibold px-4 py-1.5 rounded-full transition ${
+                    form.isOnSale ? 'bg-green-100 text-green-700' : 'bg-stone-200 text-stone-500'
+                  }`}
+                >
+                  {form.isOnSale ? 'Active' : 'Off'}
+                </button>
+              </div>
+              {form.isOnSale && (
+                <div>
+                  <label className="text-sm font-medium text-[#1a0a00] block mb-1">Sale Price (GHS)</label>
+                  <input
+                    type="number"
+                    name="salePrice"
+                    value={form.salePrice}
+                    onChange={handleChange}
+                    placeholder="199"
+                    className="w-full border border-stone-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[#f59b1e]"
+                  />
+                  <p className="text-xs text-stone-400 mt-1">
+                    Customers will see the original price crossed out with this sale price next to it.
+                  </p>
+                </div>
+              )}
             </div>
 
             {variants.length === 0 && (
