@@ -3,184 +3,85 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '../../lib/supabase'
-import Link from 'next/link'
 import AdminSidebar from '../components/AdminSidebar'
 
-const CATEGORIES = ['Tote Bags', 'Purses', 'Clutches']
+const STATUS_FILTERS = ['All', 'pending', 'paid', 'shipped', 'delivered']
 
-export default function NewProductPage() {
+export default function OrdersPage() {
   const router = useRouter()
-
-  const [form, setForm] = useState({
-    name: '',
-    description: '',
-    price: '',
-    category: '',
-    stock: '',
-  })
-  const [mainImages, setMainImages] = useState([])
-  const [uploading, setUploading] = useState(false)
-  const [saving, setSaving] = useState(false)
-
-  const [allTags, setAllTags] = useState([])
-  const [selectedTagIds, setSelectedTagIds] = useState([])
-
-  const [variants, setVariants] = useState([])
+  const [orders, setOrders] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [activeFilter, setActiveFilter] = useState('All')
+  const [search, setSearch] = useState('')
+  const [updatingId, setUpdatingId] = useState(null)
+  const [expandedId, setExpandedId] = useState(null)
 
   useEffect(() => {
-    async function loadTags() {
-      const supabase = createClient()
-      const { data } = await supabase.from('tags').select('*').order('category')
-      if (data) setAllTags(data)
+    loadOrders()
+
+    const supabase = createClient()
+    const channel = supabase
+      .channel('orders-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        loadOrders()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
     }
-    loadTags()
   }, [])
 
-  function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value })
-  }
-
-  function toggleTag(tagId) {
-    setSelectedTagIds(prev =>
-      prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]
-    )
-  }
-
-  async function uploadFiles(files) {
+  async function loadOrders() {
+    setLoading(true)
     const supabase = createClient()
-    const uploadedUrls = []
+    const { data: { session } } = await supabase.auth.getSession()
 
-    for (const file of files) {
-      const fileName = `${Date.now()}-${file.name.replace(/\s+/g, '-').toLowerCase()}`
-      const { error } = await supabase.storage
-        .from('product-images')
-        .upload(fileName, file)
+    if (!session) {
+      router.push('/login')
+      return
+    }
 
-      if (!error) {
-        const { data } = supabase.storage.from('product-images').getPublicUrl(fileName)
-        uploadedUrls.push(data.publicUrl)
+    const { data } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (data) setOrders(data)
+    setLoading(false)
+  }
+
+  async function updateStatus(orderId, newStatus) {
+    setUpdatingId(orderId)
+    const supabase = createClient()
+    await supabase
+      .from('orders')
+      .update({ status: newStatus })
+      .eq('id', orderId)
+
+    setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o))
+
+    if (newStatus === 'delivered') {
+      try {
+        await fetch('/api/send-review-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId }),
+        })
+      } catch (err) {
+        console.error('Failed to send review email:', err)
       }
     }
 
-    return uploadedUrls
+    setUpdatingId(null)
   }
 
-  async function handleMainImageUpload(e) {
-    const files = Array.from(e.target.files)
-    if (files.length === 0) return
-    setUploading(true)
-    const urls = await uploadFiles(files)
-    setMainImages(prev => [...prev, ...urls])
-    setUploading(false)
-  }
-
-  function removeMainImage(index) {
-    setMainImages(mainImages.filter((_, i) => i !== index))
-  }
-
-  function addVariant() {
-    setVariants([...variants, {
-      color_name: '',
-      color_hex: '#000000',
-      stock: 0,
-      images: [],
-      uploading: false,
-    }])
-  }
-
-  function updateVariant(index, field, value) {
-    const updated = [...variants]
-    updated[index][field] = value
-    setVariants(updated)
-  }
-
-  async function handleVariantImageUpload(index, e) {
-    const files = Array.from(e.target.files)
-    if (files.length === 0) return
-    const updated = [...variants]
-    updated[index].uploading = true
-    setVariants(updated)
-
-    const urls = await uploadFiles(files)
-
-    const finalUpdated = [...variants]
-    finalUpdated[index].images = [...finalUpdated[index].images, ...urls]
-    finalUpdated[index].uploading = false
-    setVariants(finalUpdated)
-  }
-
-  function removeVariantImage(variantIndex, imageIndex) {
-    const updated = [...variants]
-    updated[variantIndex].images = updated[variantIndex].images.filter((_, i) => i !== imageIndex)
-    setVariants(updated)
-  }
-
-  function removeVariant(index) {
-    setVariants(variants.filter((_, i) => i !== index))
-  }
-
-  async function handleSave() {
-    if (!form.name || !form.price || !form.category || mainImages.length === 0) {
-      alert('Please fill in name, price, category, and at least one product photo.')
-      return
-    }
-
-    setSaving(true)
-    const supabase = createClient()
-
-    const totalStock = variants.length > 0
-      ? variants.reduce((sum, v) => sum + Number(v.stock || 0), 0)
-      : Number(form.stock || 0)
-
-    const { data: product, error } = await supabase
-      .from('products')
-      .insert({
-        name: form.name,
-        description: form.description,
-        price: Number(form.price),
-        category: form.category,
-        stock: totalStock,
-        images: mainImages,
-        is_active: true,
-      })
-      .select()
-      .single()
-
-    if (error || !product) {
-      alert('Something went wrong saving the product.')
-      setSaving(false)
-      return
-    }
-
-    if (selectedTagIds.length > 0) {
-      const tagRows = selectedTagIds.map(tagId => ({
-        product_id: product.id,
-        tag_id: tagId,
-      }))
-      await supabase.from('product_tags').insert(tagRows)
-    }
-
-    if (variants.length > 0) {
-      const variantRows = variants.map((v, i) => ({
-        product_id: product.id,
-        color_name: v.color_name,
-        color_hex: v.color_hex,
-        stock: Number(v.stock || 0),
-        images: v.images,
-        sort_order: i + 1,
-      }))
-      await supabase.from('product_variants').insert(variantRows)
-    }
-
-    router.push('/products')
-  }
-
-  const tagsByCategory = allTags.reduce((acc, tag) => {
-    const cat = tag.category || 'Other'
-    if (!acc[cat]) acc[cat] = []
-    acc[cat].push(tag)
-    return acc
-  }, {})
+  const filteredOrders = orders.filter(order => {
+    const matchesFilter = activeFilter === 'All' || order.status === activeFilter
+    const matchesSearch = !search ||
+      order.payment_reference?.toLowerCase().includes(search.toLowerCase())
+    return matchesFilter && matchesSearch
+  })
 
   return (
     <div className="min-h-screen bg-[#fff8f2] flex flex-col sm:flex-row">
@@ -188,250 +89,113 @@ export default function NewProductPage() {
       <AdminSidebar />
 
       {/* Main Content */}
-      <main className="flex-1 p-4 sm:p-8 max-w-4xl">
-        <div className="flex items-center gap-4 mb-8">
-          <Link href="/products" className="text-stone-400 hover:text-[#1a0a00]">
-            ← Back
-          </Link>
-          <h2 className="text-2xl font-bold text-[#1a0a00]">Add New Product</h2>
+      <main className="flex-1 p-4 sm:p-8">
+        <h2 className="text-2xl font-bold text-[#1a0a00] mb-8">Orders</h2>
+
+        {/* Filters + Search */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-between mb-6">
+          <div className="flex gap-2 flex-wrap">
+            {STATUS_FILTERS.map(status => (
+              <button
+                key={status}
+                onClick={() => setActiveFilter(status)}
+                className={`px-4 py-2 rounded-full text-xs font-semibold capitalize transition ${
+                  activeFilter === status
+                    ? 'bg-[#1a0a00] text-white'
+                    : 'bg-white text-[#1a0a00] border border-stone-200 hover:border-[#f59b1e]'
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            placeholder="Search by reference..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="border border-stone-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[#f59b1e] w-full sm:w-64"
+          />
         </div>
 
-        <div className="space-y-6">
-
-          {/* Basic Info */}
-          <div className="bg-white rounded-2xl shadow p-6 space-y-4">
-            <h3 className="font-bold text-[#1a0a00]">Basic Information</h3>
-
-            <div>
-              <label className="text-sm font-medium text-[#1a0a00] block mb-1">Product Name</label>
-              <input
-                type="text"
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                placeholder="Classic Tote Bag"
-                className="w-full border border-stone-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[#f59b1e]"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-[#1a0a00] block mb-1">Description</label>
-              <textarea
-                name="description"
-                value={form.description}
-                onChange={handleChange}
-                rows={3}
-                placeholder="A spacious and stylish tote bag..."
-                className="w-full border border-stone-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[#f59b1e]"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-[#1a0a00] block mb-1">Price (GHS)</label>
-                <input
-                  type="number"
-                  name="price"
-                  value={form.price}
-                  onChange={handleChange}
-                  placeholder="250"
-                  className="w-full border border-stone-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[#f59b1e]"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-[#1a0a00] block mb-1">Category</label>
-                <select
-                  name="category"
-                  value={form.category}
-                  onChange={handleChange}
-                  className="w-full border border-stone-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[#f59b1e]"
+        {/* Orders List */}
+        {loading ? (
+          <p className="text-stone-400">Loading orders...</p>
+        ) : filteredOrders.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow p-10 text-center">
+            <p className="text-stone-400">No orders found.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredOrders.map(order => (
+              <div key={order.id} className="bg-white rounded-2xl shadow p-6">
+                <div
+                  onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}
+                  className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4 cursor-pointer"
                 >
-                  <option value="">Select category</option>
-                  {CATEGORIES.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {variants.length === 0 && (
-              <div>
-                <label className="text-sm font-medium text-[#1a0a00] block mb-1">Stock</label>
-                <input
-                  type="number"
-                  name="stock"
-                  value={form.stock}
-                  onChange={handleChange}
-                  placeholder="15"
-                  className="w-full border border-stone-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[#f59b1e]"
-                />
-                <p className="text-xs text-stone-400 mt-1">
-                  Leave this and use color variants below if this product comes in multiple colors.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Main Product Photos */}
-          <div className="bg-white rounded-2xl shadow p-6 space-y-4">
-            <h3 className="font-bold text-[#1a0a00]">Product Photos</h3>
-            <p className="text-xs text-stone-400">
-              These show for the default view. If you add color variants below, each color can have its own photos too.
-            </p>
-
-            <div className="flex flex-wrap gap-3">
-              {mainImages.map((img, i) => (
-                <div key={i} className="relative w-24 h-24">
-                  <img src={img} alt="" className="w-full h-full object-cover rounded-xl" />
-                  <button
-                    onClick={() => removeMainImage(i)}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-              <label className="w-24 h-24 border-2 border-dashed border-stone-300 rounded-xl flex items-center justify-center cursor-pointer hover:border-[#f59b1e] transition">
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleMainImageUpload}
-                  className="hidden"
-                />
-                <span className="text-stone-400 text-2xl">+</span>
-              </label>
-            </div>
-            {uploading && <p className="text-xs text-stone-400">Uploading...</p>}
-          </div>
-
-          {/* Tags */}
-          <div className="bg-white rounded-2xl shadow p-6 space-y-4">
-            <h3 className="font-bold text-[#1a0a00]">Tags</h3>
-            {Object.entries(tagsByCategory).map(([category, tags]) => (
-              <div key={category}>
-                <p className="text-xs font-semibold text-stone-400 uppercase mb-2">{category}</p>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map(tag => (
-                    <button
-                      key={tag.id}
-                      onClick={() => toggleTag(tag.id)}
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-full transition ${
-                        selectedTagIds.includes(tag.id)
-                          ? 'bg-[#1a0a00] text-white'
-                          : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-                      }`}
+                  <div>
+                    <p className="font-mono text-xs text-stone-400 mb-1">{order.payment_reference}</p>
+                    <p className="text-xs text-stone-400">
+                      {new Date(order.created_at).toLocaleDateString('en-GB', {
+                        day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                    <span className={`text-xs font-semibold px-3 py-1 rounded-full capitalize ${
+                      order.status === 'paid' ? 'bg-green-100 text-green-700' :
+                      order.status === 'shipped' ? 'bg-blue-100 text-blue-700' :
+                      order.status === 'delivered' ? 'bg-purple-100 text-purple-700' :
+                      'bg-stone-100 text-stone-500'
+                    }`}>
+                      {order.status}
+                    </span>
+                    <select
+                      value={order.status}
+                      onChange={(e) => updateStatus(order.id, e.target.value)}
+                      disabled={updatingId === order.id}
+                      className="text-xs border border-stone-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#f59b1e] disabled:opacity-50"
                     >
-                      {tag.name}
-                    </button>
-                  ))}
+                      <option value="pending">Pending</option>
+                      <option value="paid">Paid</option>
+                      <option value="shipped">Shipped</option>
+                      <option value="delivered">Delivered</option>
+                    </select>
+                  </div>
                 </div>
+
+                {expandedId === order.id && (
+                  <>
+                    {/* Items */}
+                    <div className="border-t pt-4 space-y-2">
+                      {order.items?.map((item, i) => (
+                        <div key={i} className="flex justify-between text-sm text-stone-600">
+                          <span>{item.name} x {item.quantity}</span>
+                          <span>GHS {(item.price * item.quantity).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="border-t mt-3 pt-3 flex justify-between font-bold text-[#1a0a00] text-sm">
+                      <span>Total</span>
+                      <span>GHS {order.total?.toFixed(2)}</span>
+                    </div>
+
+                    {/* Delivery Info */}
+                    {order.delivery_address && (
+                      <div className="border-t mt-3 pt-3 text-sm text-stone-500">
+                        <p className="font-semibold text-[#1a0a00] mb-1">Delivery Details</p>
+                        <p>{order.delivery_address.fullName}</p>
+                        <p>{order.delivery_address.email}</p>
+                        <p>{order.delivery_address.phone}</p>
+                        <p>{order.delivery_address.address}, {order.delivery_address.city}, {order.delivery_address.region}</p>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             ))}
           </div>
-
-          {/* Color Variants */}
-          <div className="bg-white rounded-2xl shadow p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-[#1a0a00]">Color Variants</h3>
-              <button
-                onClick={addVariant}
-                className="text-xs font-semibold text-[#f59b1e] hover:underline"
-              >
-                + Add Color
-              </button>
-            </div>
-
-            {variants.length === 0 ? (
-              <p className="text-sm text-stone-400">No color variants added. This product will use the stock field above.</p>
-            ) : (
-              <div className="space-y-4">
-                {variants.map((variant, i) => (
-                  <div key={i} className="border border-stone-200 rounded-xl p-4 space-y-3">
-                    <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 w-full">
-                        <div>
-                          <label className="text-xs font-medium text-[#1a0a00] block mb-1">Color Name</label>
-                          <input
-                            type="text"
-                            value={variant.color_name}
-                            onChange={(e) => updateVariant(i, 'color_name', e.target.value)}
-                            placeholder="Brown"
-                            className="w-full border border-stone-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[#f59b1e]"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-medium text-[#1a0a00] block mb-1">Color Swatch</label>
-                          <input
-                            type="color"
-                            value={variant.color_hex}
-                            onChange={(e) => updateVariant(i, 'color_hex', e.target.value)}
-                            className="w-full h-9 border border-stone-200 rounded-lg cursor-pointer"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-medium text-[#1a0a00] block mb-1">Stock</label>
-                          <input
-                            type="number"
-                            value={variant.stock}
-                            onChange={(e) => updateVariant(i, 'stock', e.target.value)}
-                            placeholder="10"
-                            className="w-full border border-stone-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[#f59b1e]"
-                          />
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => removeVariant(i)}
-                        className="text-red-400 hover:text-red-600 text-xs font-semibold sm:mt-5"
-                      >
-                        Remove
-                      </button>
-                    </div>
-
-                    {/* Variant Photos */}
-                    <div>
-                      <label className="text-xs font-medium text-[#1a0a00] block mb-1">Photos for this color</label>
-                      <div className="flex flex-wrap gap-2">
-                        {variant.images.map((img, imgI) => (
-                          <div key={imgI} className="relative w-16 h-16">
-                            <img src={img} alt="" className="w-full h-full object-cover rounded-lg" />
-                            <button
-                              onClick={() => removeVariantImage(i, imgI)}
-                              className="absolute -top-1 -right-1 bg-red-500 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                        <label className="w-16 h-16 border-2 border-dashed border-stone-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-[#f59b1e] transition">
-                          <input
-                            type="file"
-                            multiple
-                            accept="image/*"
-                            onChange={(e) => handleVariantImageUpload(i, e)}
-                            className="hidden"
-                          />
-                          <span className="text-stone-400 text-lg">+</span>
-                        </label>
-                      </div>
-                      {variant.uploading && <p className="text-xs text-stone-400 mt-1">Uploading...</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full bg-[#1a0a00] text-white py-4 rounded-full font-bold hover:bg-[#f59b1e] hover:text-[#1a0a00] transition disabled:opacity-50"
-          >
-            {saving ? 'Saving...' : 'Save Product'}
-          </button>
-
-        </div>
+        )}
       </main>
     </div>
   )
